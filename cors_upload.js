@@ -96,6 +96,7 @@ RetryHandler.prototype.getRandomInt_ = function(min, max) {
  */
 var MediaUploader = function(options) {
   var noop = function() {};
+
   this.file = options.file;
   this.contentType = options.contentType || this.file.type || 'application/octet-stream';
   this.metadata = options.metadata || {
@@ -106,6 +107,7 @@ var MediaUploader = function(options) {
   this.onComplete = options.onComplete || noop;
   this.onProgress = options.onProgress || noop;
   this.onError = options.onError || noop;
+
   this.offset = options.offset || 0;
   this.chunkSize = options.chunkSize || 0;
   this.retryHandler = new RetryHandler();
@@ -115,6 +117,7 @@ var MediaUploader = function(options) {
     var params = options.params || {};
     params.uploadType = 'resumable';
     this.url = this.buildUrl_(options.fileId, params, options.baseUrl);
+    console.log('!this.url - this.url :', this.url);
   }
   this.httpMethod = options.fileId ? 'PUT' : 'POST';
 };
@@ -134,14 +137,27 @@ MediaUploader.prototype.upload = function() {
 
   xhr.onload = function(e) {
     if (e.target.status < 400) {
+      console.log('e.target.status < 400 :', e.target.status);
+
       var location = e.target.getResponseHeader('Location');
       this.url = location;
+      console.log('this.url :', this.url);
+      /*
+      https://www.googleapis.com/upload/youtube/v3/videos
+      ?part=snippet%2Cstatus
+      &uploadType=resumable
+      &upload_id=AEnB2UoHA5rOh3dZiuyEyZMAjW9PGROky7KLkNa4GCoEbEoF6YNDCJ4THSGYWTkfn_gxMdV0ns_KgdPeJPKuCNO3OUG0mUTMBg
+      */
+
       this.sendFile_();
     } else {
       this.onUploadError_(e);
     }
   }.bind(this);
   xhr.onerror = this.onUploadError_.bind(this);
+
+  console.log('this.metadata :', this.metadata);
+
   xhr.send(JSON.stringify(this.metadata));
 };
 
@@ -151,6 +167,7 @@ MediaUploader.prototype.upload = function() {
  * @private
  */
 MediaUploader.prototype.sendFile_ = function() {
+  console.log('sendFile_');
   var content = this.file;
   var end = this.file.size;
 
@@ -162,11 +179,14 @@ MediaUploader.prototype.sendFile_ = function() {
     content = content.slice(this.offset, end);
   }
 
+  console.log('PUT :', this.url);
   var xhr = new XMLHttpRequest();
   xhr.open('PUT', this.url, true);
   xhr.setRequestHeader('Content-Type', this.contentType);
   xhr.setRequestHeader('Content-Range', 'bytes ' + this.offset + '-' + (end - 1) + '/' + this.file.size);
   xhr.setRequestHeader('X-Upload-Content-Type', this.file.type);
+
+  // XMLHttpRequest 객체의 upload object가 있다면, progress 체크 가능. 'ㅅ')b
   if (xhr.upload) {
     xhr.upload.addEventListener('progress', this.onProgress);
   }
