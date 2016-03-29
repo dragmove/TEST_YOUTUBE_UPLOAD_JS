@@ -1,0 +1,202 @@
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="user-scalable=no, maximum-scale=1.0, minimum-scale=1.0, width=device-width, initial-scale=1.0">
+    <title>My Uploads</title>
+    <link rel="stylesheet" href="my_uploads.css" />
+  </head>
+  <body>
+    <div id="login-container" class="pre-auth">This application requires access to your YouTube account.
+      Please <a href="#" id="login-link">authorize</a> to continue.
+    </div>
+
+    <div id="video-container"></div>
+    <div class="button-container">
+      <button id="prev-button" class="paging-button">Previous Page</button>
+      <button id="next-button" class="paging-button">Next Page</button>
+    </div>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+    <script>
+      (function($) {
+        "use strict";
+
+        var OAUTH2_CLIENT_ID = '50482933306-aomg7os8cfl7544h65qqihi82jf0tnn9.apps.googleusercontent.com',
+          OAUTH2_SCOPES = [
+          'https://www.googleapis.com/auth/youtube'
+        ];
+
+        var accessToken = '';
+
+        var playlistId = '',
+          nextPageToken = '',
+          prevPageToken = '';
+
+        var prevBtn = $('#prev-button'),
+          nextBtn = $('#next-button');
+
+        function googleApiClientReady() {
+          console.log('googleApiClientReady');
+
+          gapi.auth.init(function() {
+            window.setTimeout(checkAuth, 1);
+          });
+        }
+
+        function checkAuth() {
+          // gapi - https://developers.google.com/api-client-library/javascript/reference/referencedocs#methods
+          gapi.auth.authorize({
+            client_id: OAUTH2_CLIENT_ID,
+            immediate: true,
+            response_type: 'token',
+            scope: OAUTH2_SCOPES[0]
+          }, handleAuthResult);
+        }
+
+        function handleAuthResult(authResult) {
+          console.log('handleAuthResult :', authResult);
+          if (authResult && !authResult.error) {
+            console.log('success');
+
+            // Auth was successful; hide the things related to prompting for auth and show the things
+            // that should be visible after auth succeeds.
+            $('.pre-auth').hide();
+
+            accessToken = authResult.access_token;
+            requestUserUploadsPlaylistId();
+          } else {
+            console.log('fail');
+
+            // Make the #login-link clickable, and attempt a non-immediate OAuth 2 client flow.
+            // The current function will be called when that flow is complete.
+            $('#login-link').click(function() {
+              gapi.auth.authorize({
+                client_id: OAUTH2_CLIENT_ID,
+                scope: OAUTH2_SCOPES,
+                immediate: false
+                }, handleAuthResult);
+            });
+          }
+        }
+
+        function requestUserUploadsPlaylistId() {
+          console.log('requestUserUploadsPlaylistId');
+        }
+
+        //Retrieve the uploads playlist id.
+        function requestUserUploadsPlaylistId() {
+          // https://developers.google.com/youtube/v3/docs/channels/list
+          gapi.client.request({
+            path: '/youtube/v3/channels',
+            params: {
+              part: 'snippet, contentDetails',
+              mine: true
+            },
+            callback: function(response) {
+              console.log('response :', response);
+
+              if (response.error) {
+                console.log(response.error.message);
+              } else {
+                if(response.items.length <= 0) {
+                  window.alert('none');
+                  return;
+                }
+
+                playlistId = response.items[0].contentDetails.relatedPlaylists.uploads;
+                requestVideoPlaylist(playlistId);
+
+                nextBtn.on('click', function(event) {
+                  event.preventDefault();
+                  nextPage();
+                });
+
+                prevBtn.on('click', function(event) {
+                  event.preventDefault();
+                  previousPage();
+                });
+
+                $('.pre-sign-in').hide();
+              }
+            }
+          });
+        }
+
+        function requestVideoPlaylist(playlistId, pageToken) {
+          $('#video-container').html('');
+
+          var requestOptions = {
+            playlistId: playlistId,
+            part: 'id, snippet, contentDetails, status',
+            maxResults: 1
+          };
+          if (pageToken) {
+            requestOptions.pageToken = pageToken;
+          }
+
+          gapi.client.request({
+            path: '/youtube/v3/playlistItems',
+            params: requestOptions,
+            callback: function(response) {
+              console.log('response :', response);
+
+              if (response.error) {
+                console.log(response.error.message);
+              } else {
+                var playlistItems = response.items;
+                if(playlistItems.length <= 0) {
+                  window.alert( 'no uploaded video' );
+                  return;
+                }
+
+                // set btns visible
+                nextPageToken = response.nextPageToken;
+                var nextVis = nextPageToken ? 'visible' : 'hidden';
+                nextBtn.css('visibility', nextVis);
+
+                prevPageToken = response.prevPageToken;
+                var prevVis = prevPageToken ? 'visible' : 'hidden';
+                prevBtn.css('visibility', prevVis);
+
+                $.each(playlistItems, function(index, item) {
+                  createDisplayThumbnail(item.snippet);
+                });
+              }
+            }
+          });
+        }
+
+        function createDisplayThumbnail(videoSnippet) {
+          var titleEl = $('<h3>');
+          titleEl.addClass('video-title');
+
+          $(titleEl).html(videoSnippet.title);
+          var thumbnailUrl = videoSnippet.thumbnails.medium.url;
+
+          var div = $('<div>');
+          div.addClass('video-content');
+          div.css('backgroundImage', 'url("' + thumbnailUrl + '")');
+          div.append(titleEl);
+          $('#video-container').append(div);
+        }
+
+        // Retrieve the next page of videos.
+        function nextPage() {
+          requestVideoPlaylist(playlistId, nextPageToken);
+        }
+
+        // Retrieve the previous page of videos.
+        function previousPage() {
+          requestVideoPlaylist(playlistId, prevPageToken);
+        }
+
+        window.googleApiClientReady = googleApiClientReady;
+      }(jQuery));
+    </script>
+    <!--
+    <script src="auth.js"></script>
+    <script src="my_uploads.js"></script>
+    -->
+    <script src="https://apis.google.com/js/client.js?onload=googleApiClientReady"></script>
+  </body>
+</html>
